@@ -148,14 +148,40 @@ Open <http://localhost:8000>.
 > Nano are served from `eu-north1` while Super and Ultra are served from
 > `us-central1`.
 
-### Verify without burning credits
+### Verify it works
+
+Offline, no key and no network — memory store, skill loading, tool-schema gating:
 
 ```bash
 python scripts/smoke_test.py
 ```
 
-Exercises the memory store, skill loading and tool-schema gating offline — no API
-key and no network.
+Live against Token Factory (spends a small number of tokens). Checks that both
+Nemotron models are visible on your account, that tool calling works, that a full
+agent turn writes a memory, and that escalation to Ultra fires:
+
+```bash
+python scripts/verify_live.py
+```
+
+### Two things we measured
+
+Both came out of testing against the live API, and both changed the code:
+
+**1. The model would claim to save without saving.** Early on, asking it to
+remember something produced *"I've saved that…"* with no `remember` call and an
+empty memory pane — the worst possible failure for a memory product. Adding an
+explicit rule to the system prompt (*saying you saved something is not saving it*)
+plus naming standing preferences as durable took the measured tool-call rate from
+8/12 to **12/12, with 0/12 false claims** across three prompts run four times each.
+The glass-box trace is what made the bug visible in the first place.
+
+**2. Nemotron 3.5 Lightning is a reasoning model, so token budgets matter.** It
+emits chain-of-thought into a separate `reasoning_content` field before writing
+`content`. With a tight `max_tokens`, the call truncates mid-reasoning and the
+partial thinking text surfaces as the answer. Our first test used
+`max_tokens=12` and got `"Here's a thinking process:\n\n1. **Analyze"` instead of
+`"ready"`. The orchestration call now budgets 2400 tokens.
 
 ### Deploy
 

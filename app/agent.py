@@ -19,6 +19,13 @@ from .tools import format_recall, tavily_search, tool_schemas
 
 MAX_STEPS = 6
 
+# Low, not zero: tool-call reliability drops noticeably as this rises, and the
+# orchestration model's job is routing, not prose.
+ORCHESTRATION_TEMPERATURE = 0.1
+# Lightning is a reasoning model -- it spends tokens on reasoning_content before
+# emitting content, so a tight budget truncates mid-thought.
+REASONING_TEMPERATURE = 0.4
+
 SYSTEM_PROMPT = """You are Mnemo, a personal AI assistant that runs on infrastructure \
 the user controls. You are concise, concrete and never sycophantic.
 
@@ -27,6 +34,15 @@ How you work:
 before answering anything about the user, their projects or their past decisions. \
 Call `remember` when you learn something durable and worth knowing in a future \
 conversation -- not for small talk, and never for secrets or credentials.
+- Anything the user tells you to keep in mind, remember, or apply going forward \
+is durable by definition -- including preferences about how you should behave, \
+deadlines, and standing instructions. Acknowledging it in prose is not enough: \
+call `remember`. When in doubt, save it; the user can delete it in one click.
+- HARD RULE: saying you saved something is not saving it. Never claim you have \
+remembered, saved, stored or noted anything unless you actually called the \
+`remember` tool in this same turn. If the user asks you to remember something, \
+call `remember` first, then answer. The user can see which tools you called, so a \
+false claim is always visible.
 - You run on a fast model. When a sub-problem needs real reasoning (multi-step \
 planning, careful analysis, tradeoffs), call `think_harder` and use what it returns.
 - The user's skills are procedures they wrote. If one applies, call `load_skill` \
@@ -58,13 +74,17 @@ class Agent:
         )
 
     async def _complete(
-        self, model: str, messages: list[dict[str, Any]], tools: list[dict] | None
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict] | None,
+        temperature: float = ORCHESTRATION_TEMPERATURE,
     ):
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": 0.3,
-            "max_tokens": 1600,
+            "temperature": temperature,
+            "max_tokens": 2400,
         }
         if tools:
             kwargs["tools"] = tools
@@ -87,6 +107,7 @@ class Agent:
                 {"role": "user", "content": problem},
             ],
             tools=None,
+            temperature=REASONING_TEMPERATURE,
         )
         return (resp.choices[0].message.content or "").strip()
 

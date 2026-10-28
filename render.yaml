@@ -21,6 +21,10 @@ services:
         value: "25"
       - key: MNEMO_DATA_DIR
         value: /tmp/mnemo
+      # Render does not inject PORT for the Docker runtime; it probes for the
+      # listening port. Setting it explicitly makes detection unambiguous.
+      - key: PORT
+        value: "8000"
       - key: NEBIUS_API_KEY
         sync: false
       - key: TAVILY_API_KEY

@@ -242,10 +242,21 @@ fits the Hub's 60-character limit.
 > free Spaces keep running; this applies to new ones. Without PRO, use Render
 > below. The script detects the refusal and says so rather than failing opaquely.
 
-**Render** — New → Blueprint, pick this repo, and set the two keys when prompted.
-[`render.yaml`](render.yaml) is at the repo root where Render looks for it. The
-free plan has an ephemeral filesystem and cannot mount a disk, which suits demo
-mode; the blueprint has a commented disk block for paid instances.
+**Render** — New → Blueprint, pick this repo, and set the two keys when
+prompted. [`render.yaml`](render.yaml) is at the repo root where Render looks
+for it.
+
+Two things the blueprint handles that are easy to get wrong. Render does not
+inject `PORT` for the Docker runtime and instead probes for the listening port,
+so the image binds `${PORT:-8000}` and the blueprint pins `PORT` explicitly —
+serving a fixed port while the platform probes another is a common way to fail a
+deploy with "No open ports detected". And the free plan has an ephemeral
+filesystem and cannot mount a disk at all, so it writes to `/tmp` and runs in
+demo mode, where per-visitor memory is expendable by design; the blueprint has a
+commented disk block for paid instances.
+
+Free services also spin down after about 15 minutes idle and cold-start in
+roughly 50 seconds.
 
 ### Public demo mode
 

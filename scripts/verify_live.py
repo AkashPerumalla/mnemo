@@ -137,7 +137,33 @@ async def main() -> int:
         except Exception as exc:
             check("tavily search responds", False, str(exc)[:200])
 
-    # 5. A full agent turn against a throwaway store.
+    # 5. The agent actually reaching Tavily through the tool layer.
+    #    The raw HTTP check above proves the key works; this proves the model
+    #    chooses the tool and the result reaches the answer.
+    if settings.tavily_ready:
+        print("\nweb_search through the agent")
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "web.sqlite3")
+            agent = Agent(settings, store)
+            try:
+                result = await agent.run_turn(
+                    "Search the web and tell me what Nebius Token Factory is. "
+                    "Cite the URLs you used."
+                )
+                events = [e["tool"] for e in result.events]
+                searched = "web_search" in events
+                check("agent called web_search", searched, f"tools: {events or 'none'}")
+                sources = [u for e in result.events for u in (e.get("sources") or [])]
+                check("search returned sources", bool(sources),
+                      f"{len(sources)} url(s)")
+                check("reply cites a url", "http" in result.reply.lower(),
+                      result.reply[:90])
+                for u in sources[:3]:
+                    print(f"        {u}")
+            except Exception as exc:
+                check("agent called web_search", False, str(exc)[:300])
+
+    # 6. A full agent turn against a throwaway store.
     print("\nagent turn (writes to a temp store, not your real memory file)")
     with tempfile.TemporaryDirectory() as tmp:
         store = MemoryStore(Path(tmp) / "verify.sqlite3")
@@ -157,7 +183,7 @@ async def main() -> int:
         except Exception as exc:
             check("turn returned a reply", False, str(exc)[:300])
 
-        # 6. Escalation to the reasoning model.
+        # 7. Escalation to the reasoning model.
         try:
             result = await agent.run_turn(
                 "Think carefully: I have two deploy options for a 550B model, one with "

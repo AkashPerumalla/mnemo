@@ -78,7 +78,12 @@ is a call to the Token Factory inference API.
 
 - **Tavily Search API** — the `web_search` tool makes a functional runtime call to
   `POST https://api.tavily.com/search` ([`app/tools.py`](app/tools.py)), used by the
-  `research-note` skill to ground answers in live sources with URLs.
+  `research-note` skill to ground answers in live sources with URLs. The tool is
+  gated on `TAVILY_API_KEY`: without it the tool is never offered to the model,
+  rather than failing at call time. `scripts/verify_web_search_mock.py` asserts the
+  request shape against Tavily's documented contract, and the UI trace shows the
+  exact URLs returned — the model sometimes normalises a URL in its prose, so the
+  trace is the authoritative record of what was actually fetched.
 - **Nebius Serverless Endpoints** — [`deploy/Dockerfile`](deploy/Dockerfile) is the
   deployment path, with memories on a mounted volume so they survive redeploys.
 
@@ -156,9 +161,19 @@ Offline, no key and no network — memory store, skill loading, tool-schema gati
 python scripts/smoke_test.py
 ```
 
+The web_search chain, with a local stand-in for Tavily — a real Nemotron turn, but
+no Tavily credits spent. Checks that the model chooses the tool, that our request
+matches Tavily's documented contract, and that sources reach the answer. Use this
+before you have a Tavily key:
+
+```bash
+python scripts/verify_web_search_mock.py
+```
+
 Live against Token Factory (spends a small number of tokens). Checks that both
 Nemotron models are visible on your account, that tool calling works, that a full
-agent turn writes a memory, and that escalation to Ultra fires:
+agent turn writes a memory, that web_search reaches the real Tavily API, and that
+escalation to Ultra fires:
 
 ```bash
 python scripts/verify_live.py

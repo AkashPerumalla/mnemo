@@ -7,7 +7,7 @@ sdk: docker
 app_port: 8000
 pinned: false
 license: mit
-short_description: A personal AI whose memory is a file you own. Nemotron on Nebius.
+short_description: Personal AI with memory you own. Nemotron on Nebius.
 ---
 
 # Mnemo

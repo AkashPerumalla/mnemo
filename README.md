@@ -225,15 +225,22 @@ The same image deploys to Nebius Serverless Endpoints.
 
 **Hugging Face Spaces** — a Space needs `Dockerfile` and a front-matter
 `README.md` at its own root, so the layout is assembled rather than pushed
-directly:
+directly. The script reads your username from the token, creates the Space if it
+does not exist, and pushes:
 
 ```bash
-HF_TOKEN=hf_xxx ./scripts/deploy_space.sh <your-hf-username>
+HF_TOKEN=hf_xxx ./scripts/deploy_space.sh
 ```
 
 Then set `NEBIUS_API_KEY` and `TAVILY_API_KEY` under Settings → Variables and
-secrets. `./scripts/deploy_space.sh --dry-run` prints the layout without pushing
-and checks that `app_port` matches the port the container listens on.
+secrets. `--dry-run` assembles and validates without touching the network,
+checking that `app_port` matches the served port and that `short_description`
+fits the Hub's 60-character limit.
+
+> Creating a **Docker** Space on free `cpu-basic` hardware requires a PRO
+> account — the Hub API says so in its own `sdk` field description. Existing
+> free Spaces keep running; this applies to new ones. Without PRO, use Render
+> below. The script detects the refusal and says so rather than failing opaquely.
 
 **Render** — New → Blueprint, pick this repo, and set the two keys when prompted.
 [`render.yaml`](render.yaml) is at the repo root where Render looks for it. The

@@ -15,6 +15,12 @@ from typing import Any
 
 KINDS = ("fact", "preference", "project", "person", "task", "note")
 
+# Jaccard token overlap above which two memories are treated as the same fact.
+DUPLICATE_THRESHOLD = 0.8
+# A shorter memory almost entirely inside a longer one is the same fact restated.
+CONTAINMENT_THRESHOLD = 0.9
+MIN_TOKENS_FOR_CONTAINMENT = 6
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,6 +83,35 @@ class MemoryStore:
             raise ValueError("memory text must not be empty")
         if kind not in KINDS:
             kind = "note"
+
+        # Collapse near-duplicates instead of stacking them. The agent can be
+        # prompted not to repeat itself, but the store should not depend on that:
+        # duplicate rows are what turn an inspectable memory pane into noise.
+        incoming = set(_tokens(text))
+        if incoming:
+            for row in self.recent(limit=500):
+                existing = set(_tokens(row["text"]))
+                if not existing:
+                    continue
+                shared = len(incoming & existing)
+                jaccard = shared / len(incoming | existing)
+                # Containment catches "same fact, restated with more detail",
+                # which scores low on Jaccard. Gated on a minimum length so a
+                # short distinct memory is never swallowed by a longer one.
+                smaller = min(len(incoming), len(existing))
+                contained = (
+                    smaller >= MIN_TOKENS_FOR_CONTAINMENT
+                    and shared / smaller >= CONTAINMENT_THRESHOLD
+                )
+                if jaccard >= DUPLICATE_THRESHOLD or contained:
+                    merged = self.update(
+                        row["id"],
+                        text=text if len(text) > len(row["text"]) else row["text"],
+                        tags=sorted(set(row["tags"]) | set(tags or [])),
+                    )
+                    merged["deduped"] = True
+                    return merged
+
         now = time.time()
         with self._conn() as c:
             cur = c.execute(

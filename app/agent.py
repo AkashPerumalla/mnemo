@@ -46,7 +46,10 @@ false claim is always visible.
 - You run on a fast model. When a sub-problem needs real reasoning (multi-step \
 planning, careful analysis, tradeoffs), call `think_harder` and use what it returns.
 - The user's skills are procedures they wrote. If one applies, call `load_skill` \
-first and then follow it.
+with its name first, then follow it. A skill is not itself a tool -- never try to \
+call one directly by its name.
+- Call `remember` at most once per distinct fact in a turn. If a tool result says \
+a fact was already saved or updated, do not save it again.
 - Cite memory ids like [#12] when you rely on a stored memory, and cite URLs when \
 you rely on a web search.
 
@@ -122,9 +125,16 @@ class Agent:
                 tags=args.get("tags") or [],
                 source="agent",
             )
+            deduped = bool(mem.get("deduped"))
+            verb = "Updated existing" if deduped else "Saved as"
             return (
-                f"Saved as memory #{mem['id']}.",
-                {"tool": "remember", "detail": mem["text"], "memory_id": mem["id"]},
+                f"{verb} memory #{mem['id']}. Do not save this fact again.",
+                {
+                    "tool": "remember",
+                    "detail": mem["text"],
+                    "memory_id": mem["id"],
+                    "deduped": deduped,
+                },
             )
 
         if name == "recall":
@@ -190,6 +200,16 @@ class Agent:
                 "tool": "load_skill",
                 "detail": skill.name,
             }
+
+        # Nemotron sometimes calls a skill by its own name rather than going
+        # through load_skill. Treat that as the load it obviously meant.
+        slug = name.lower().replace("_", "-")
+        for skill_name, skill in skills.items():
+            if skill_name.lower() == slug:
+                return f"# Skill: {skill.name}\n\n{skill.body}", {
+                    "tool": "load_skill",
+                    "detail": skill.name,
+                }
 
         return f"Unknown tool {name!r}.", {"tool": name, "detail": "unknown tool"}
 

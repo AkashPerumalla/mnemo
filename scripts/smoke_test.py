@@ -54,6 +54,25 @@ with tempfile.TemporaryDirectory() as tmp:
         bad = True
     check("empty memory text is rejected", bad)
 
+print("\ndeduplication")
+with tempfile.TemporaryDirectory() as tmp:
+    store = MemoryStore(Path(tmp) / "d.sqlite3")
+    first = store.add("Token Factory is a production inference platform serving Nemotron.", tags=["a"])
+    same = store.add("Token Factory is a production inference platform serving Nemotron.", tags=["b"])
+    check("identical memory collapses", same["id"] == first["id"] and len(store.recent()) == 1)
+    check("tags are merged on collapse", set(same["tags"]) == {"a", "b"}, str(same["tags"]))
+    check("collapse is reported", bool(same.get("deduped")))
+
+    longer = store.add("Token Factory is a production inference platform serving Nemotron, DeepSeek and Qwen over an OpenAI-compatible API.")
+    check("restatement with more detail collapses", len(store.recent()) == 1)
+    check("the longer text is kept", "DeepSeek" in store.get(first["id"])["text"])
+
+    store.add("User is building a robotics side project in Rust.")
+    store.add("User prefers terse answers with no preamble.")
+    check("distinct facts are kept apart", len(store.recent()) == 3)
+    store.add("User likes Rust")
+    check("a short memory is not swallowed", len(store.recent()) == 4)
+
 print("\nskills")
 skills = load_skills(ROOT / "skills")
 check("skills directory loads", len(skills) >= 2, f"{sorted(skills)}")

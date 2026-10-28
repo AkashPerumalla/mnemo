@@ -78,7 +78,9 @@ is a call to the Token Factory inference API.
 
 - **Tavily Search API** — the `web_search` tool makes a functional runtime call to
   `POST https://api.tavily.com/search` ([`app/tools.py`](app/tools.py)), used by the
-  `research-note` skill to ground answers in live sources with URLs. The tool is
+  `research-note` skill to ground answers in live sources with URLs. Verified end to
+  end by `scripts/verify_live.py`, which asserts the model chooses the tool, the
+  search returns sources, and the cited URLs reach the answer. The tool is
   gated on `TAVILY_API_KEY`: without it the tool is never offered to the model,
   rather than failing at call time. `scripts/verify_web_search_mock.py` asserts the
   request shape against Tavily's documented contract, and the UI trace shows the
@@ -179,7 +181,7 @@ escalation to Ultra fires:
 python scripts/verify_live.py
 ```
 
-### Two things we measured
+### Three things we measured
 
 Both came out of testing against the live API, and both changed the code:
 
@@ -191,7 +193,21 @@ plus naming standing preferences as durable took the measured tool-call rate fro
 8/12 to **12/12, with 0/12 false claims** across three prompts run four times each.
 The glass-box trace is what made the bug visible in the first place.
 
-**2. Nemotron 3.5 Lightning is a reasoning model, so token budgets matter.** It
+**2. The agent duplicated memories, and called skills as if they were tools.**
+A single research turn wrote the same conclusion to memory twice and logged
+`research-note -- unknown tool`: the model called the skill by its own name
+instead of going through `load_skill`, so the skill (which says to save exactly
+one conclusion) never loaded. Both are fixed, and deliberately fixed in different
+places. The skill-name call is handled in the tool dispatcher, which now resolves
+an unknown tool name against the skill list. Duplication is handled in the store,
+not the prompt: `MemoryStore.add` collapses a near-identical memory into the
+existing row, merging tags and keeping the longer text. A prompt can ask the model
+not to repeat itself; the store should not depend on it obeying, because duplicate
+rows are what turn an inspectable memory pane into noise. Collapsing is reported
+back to the model and shown in the trace as *updated memory* rather than
+*wrote memory*.
+
+**3. Nemotron 3.5 Lightning is a reasoning model, so token budgets matter.** It
 emits chain-of-thought into a separate `reasoning_content` field before writing
 `content`. With a tight `max_tokens`, the call truncates mid-reasoning and the
 partial thinking text surfaces as the answer. Our first test used
@@ -247,6 +263,10 @@ Honest about what this is after a short build:
 - **Conversation history is client-side.** The memory store is durable; the chat
   transcript is not kept server-side and resets on reload. Durable facts survive
   precisely because the agent wrote them to memory.
+- **Duplicate detection is lexical too.** Two statements of the same fact in
+  entirely different words will both be stored. The threshold is deliberately
+  conservative: collapsing two genuinely different memories is worse than keeping
+  a near-duplicate the user can delete in one click.
 - **Search is lexical.** A query phrased with entirely different words than the
   stored memory can miss. See the note on `MemoryStore.search` above.
 - **No scheduler yet.** "Always-on" today means persistent state across sessions,

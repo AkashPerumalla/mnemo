@@ -69,7 +69,10 @@ function renderTrace(events, modelsUsed) {
   if (!events?.length && !modelsUsed?.length) return "";
   const items = (events || [])
     .map((e) => {
-      const label = TOOL_LABELS[e.tool] || e.tool;
+      const label =
+        e.tool === "remember" && e.deduped
+          ? "updated memory"
+          : TOOL_LABELS[e.tool] || e.tool;
       const cls = e.tool === "think_harder" ? "trace-item escalate" : "trace-item";
       return `<div class="${cls}"><span class="t-name">${esc(label)}</span>` +
              `<span>${esc(e.detail || "")}</span></div>`;

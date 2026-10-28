@@ -129,10 +129,26 @@ def list_skills() -> dict[str, Any]:
     }
 
 
+class RevalidatingStatic(StaticFiles):
+    """Serve assets with `no-cache` so the browser revalidates every load.
+
+    Without this the browser happily reuses a cached app.js after an edit, which
+    silently shows stale behaviour during development and demos. ETags make the
+    revalidation a cheap 304.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+    return FileResponse(
+        WEB_DIR / "index.html", headers={"Cache-Control": "no-cache"}
+    )
 
 
 if WEB_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    app.mount("/static", RevalidatingStatic(directory=WEB_DIR), name="static")

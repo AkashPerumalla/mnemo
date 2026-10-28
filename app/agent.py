@@ -44,6 +44,11 @@ conversation -- not for small talk, and never for secrets or credentials.
 is durable by definition -- including preferences about how you should behave, \
 deadlines, and standing instructions. Acknowledging it in prose is not enough: \
 call `remember`. When in doubt, save it; the user can delete it in one click.
+- HARD RULE: never tell the user you lack web access, live data or current \
+information once a tool in this turn has returned results. You have those \
+results; use them. If they are thin, say what you found and what is still \
+missing. Do not fall back on what you remember and do not call your own \
+knowledge frozen or out of date.
 - HARD RULE: saying you saved something is not saving it. Never claim you have \
 remembered, saved, stored or noted anything unless you actually called the \
 `remember` tool in this same turn. If the user asks you to remember something, \
@@ -100,7 +105,28 @@ class Agent:
             kwargs["tool_choice"] = "auto"
         return await self.client.chat.completions.create(**kwargs)
 
-    async def _think_harder(self, problem: str) -> str:
+    @staticmethod
+    def _evidence(transcript, limit: int = 4) -> str:
+        """Tool results gathered so far in this turn, for the reasoning model.
+
+        Without this the reasoning model is blind: it cannot see the web results
+        the orchestrator just fetched, so it reasons from training alone and
+        reports that it cannot know anything recent -- which the orchestrator
+        then repeats to the user, contradicting its own search.
+        """
+        results = [
+            str(m.get("content") or "") for m in transcript if m.get("role") == "tool"
+        ]
+        if not results:
+            return ""
+        joined = "\n\n".join(r[:1500] for r in results[-limit:])
+        return (
+            "\n\nEvidence already gathered in this conversation. Treat it as "
+            "current and authoritative, and reason from it rather than from what "
+            "you remember:\n\n" + joined
+        )
+
+    async def _think_harder(self, problem: str, transcript=None) -> str:
         """Escalate to the large reasoning model. No tools -- it reasons and returns."""
         resp = await self._complete(
             self.settings.model_deep,
@@ -109,12 +135,18 @@ class Agent:
                     "role": "system",
                     "content": (
                         f"Today is {datetime.now().strftime('%A, %d %B %Y')}. "
-                        "You are a careful reasoning engine. Work through the problem "
+                        "You are a careful reasoning engine consulted mid-conversation "
+                        "by another agent that has live tools. Work through the problem "
                         "step by step, then state a clear conclusion. Be rigorous and "
-                        "flag any assumption you had to make."
+                        "flag any assumption you had to make. Never say you lack web "
+                        "access or current information: the agent consulting you has "
+                        "already gathered what is needed; reason over it."
                     ),
                 },
-                {"role": "user", "content": problem},
+                {
+                    "role": "user",
+                    "content": problem + self._evidence(transcript or []),
+                },
             ],
             tools=None,
             temperature=REASONING_TEMPERATURE,
@@ -127,6 +159,7 @@ class Agent:
         args: dict[str, Any],
         skills: dict[str, Skill],
         owner: str,
+        transcript=None,
     ) -> tuple[str, dict[str, Any]]:
         """Returns (content for the model, event for the UI trace)."""
         if name == "remember":
@@ -165,7 +198,7 @@ class Agent:
             )
 
         if name == "think_harder":
-            answer = await self._think_harder(args.get("problem", ""))
+            answer = await self._think_harder(args.get("problem", ""), transcript)
             return (
                 answer or "(the reasoning model returned nothing)",
                 {
@@ -295,7 +328,7 @@ class Agent:
                 except json.JSONDecodeError:
                     args = {}
                 content, event = await self._run_tool(
-                    call.function.name, args, skills, owner
+                    call.function.name, args, skills, owner, messages
                 )
                 result.events.append(event)
                 if event.get("model"):

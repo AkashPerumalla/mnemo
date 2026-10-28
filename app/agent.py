@@ -8,6 +8,7 @@ think_harder tool. Both calls go to the same Token Factory endpoint.
 
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -28,6 +29,11 @@ REASONING_TEMPERATURE = 0.4
 
 SYSTEM_PROMPT = """You are Mnemo, a personal AI assistant that runs on infrastructure \
 the user controls. You are concise, concrete and never sycophantic.
+
+Today is {today}. Use it for anything time-relative -- "today", "this month",
+"next week", whether a deadline has passed -- and in search queries when the
+user wants recent information. Never fall back on a date from your training
+data: it is years out and will quietly produce stale answers.
 
 How you work:
 - You have a persistent memory the user can read, edit and delete. Call `recall` \
@@ -102,6 +108,7 @@ class Agent:
                 {
                     "role": "system",
                     "content": (
+                        f"Today is {datetime.now().strftime('%A, %d %B %Y')}. "
                         "You are a careful reasoning engine. Work through the problem "
                         "step by step, then state a clear conclusion. Be rigorous and "
                         "flag any assumption you had to make."
@@ -237,6 +244,7 @@ class Agent:
             "\n".join(s.summary() for s in skills.values()) or "(no skills installed)"
         )
         system = SYSTEM_PROMPT.format(
+            today=datetime.now().strftime("%A, %d %B %Y"),
             memory_context=self.store.context_block(user_message, owner=owner),
             skill_list=skill_list,
         )

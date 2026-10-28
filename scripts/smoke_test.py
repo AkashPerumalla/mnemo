@@ -92,6 +92,21 @@ with tempfile.TemporaryDirectory() as tmp:
     store.add("User likes Rust")
     check("a short memory is not swallowed", len(store.recent()) == 4)
 
+print("\ncurrent date in the prompt")
+from datetime import datetime  # noqa: E402
+from app.agent import SYSTEM_PROMPT  # noqa: E402
+
+_now = datetime.now()
+_prompt = SYSTEM_PROMPT.format(
+    today=_now.strftime("%A, %d %B %Y"), memory_context="-", skill_list="-"
+)
+check("the prompt takes a {today} placeholder", "{today}" in SYSTEM_PROMPT)
+check("today's month and year reach the prompt",
+      _now.strftime("%B") in _prompt and str(_now.year) in _prompt,
+      _now.strftime("%B %Y"))
+check("the model is told not to guess the date from training",
+      "training" in _prompt.lower())
+
 print("\nskills")
 skills = load_skills(ROOT / "skills")
 check("skills directory loads", len(skills) >= 2, f"{sorted(skills)}")

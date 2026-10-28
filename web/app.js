@@ -36,6 +36,17 @@ function lightMarkup(text) {
     .replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
 
+function renderDemoPill(turnsLeft) {
+  const pill = $("demoPill");
+  if (turnsLeft === null || turnsLeft === undefined) {
+    pill.hidden = true;
+    return;
+  }
+  pill.hidden = false;
+  pill.textContent = `Demo \u00b7 ${turnsLeft} message${turnsLeft === 1 ? "" : "s"} left`;
+  pill.classList.toggle("low", turnsLeft <= 5);
+}
+
 function clearEmpty() {
   const empty = $("empty");
   if (empty) empty.remove();
@@ -120,6 +131,7 @@ async function send(text) {
       history.push({ role: "user", content: text });
       history.push({ role: "assistant", content: data.reply });
       history = history.slice(-20);
+      renderDemoPill(data.turns_left);
 
       const touched = (data.events || [])
         .filter((e) => e.tool === "remember" && e.memory_id)
@@ -222,6 +234,20 @@ async function loadHealth() {
     } else {
       status.textContent = "Token Factory + Tavily connected";
       status.className = "status ok";
+    }
+
+    renderDemoPill(h.turns_left);
+    if (h.demo_mode) {
+      const empty = $("empty");
+      if (empty) {
+        const note = document.createElement("p");
+        note.className = "hint";
+        note.style.marginTop = "18px";
+        note.textContent =
+          "Public demo: these memories are yours alone, kept against a cookie in " +
+          "your browser, and nobody else can see them.";
+        empty.appendChild(note);
+      }
     }
 
     const row = (k, v, cls = "") =>

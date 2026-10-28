@@ -1,0 +1,23 @@
+# Render blueprint. Create a new Blueprint instance from the repo and Render
+# reads this file. Set NEBIUS_API_KEY and TAVILY_API_KEY in the dashboard.
+services:
+  - type: web
+    name: mnemo
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    plan: free
+    envVars:
+      - key: MNEMO_DEMO_MODE
+        value: "1"
+      - key: MNEMO_DEMO_TURN_LIMIT
+        value: "25"
+      - key: MNEMO_DATA_DIR
+        value: /data
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+    disk:
+      name: mnemo-data
+      mountPath: /data
+      sizeGB: 1

@@ -222,6 +222,25 @@ docker run -p 8000:8000 --env-file .env -v mnemo-data:/data mnemo
 ```
 
 The same image deploys to Nebius Serverless Endpoints.
+[`deploy/render.yaml`](deploy/render.yaml) is a Render blueprint, and
+[`deploy/Dockerfile.space`](deploy/Dockerfile.space) plus
+[`deploy/README-space.md`](deploy/README-space.md) deploy it as a Hugging Face Space.
+
+### Public demo mode
+
+A personal memory app has an obvious problem when you host it publicly: one
+shared brain that every visitor can read, edit and wipe, paid for with your
+inference credits. Setting `MNEMO_DEMO_MODE=1` fixes both.
+
+- **Each visitor gets their own memory space**, keyed to an httponly cookie.
+  Memories are owner-scoped in SQL, so another visitor's ids are not merely
+  hidden — they are unreadable, unmodifiable and undeletable, and `wipe` only
+  ever clears the caller's own rows.
+- **A per-visitor message cap** (`MNEMO_DEMO_TURN_LIMIT`, default 25) keeps one
+  visitor from spending the whole budget. The UI shows the remaining count.
+
+Self-hosted installs are unaffected: without the flag there is one owner, no
+cookie is set, and nothing is capped.
 
 ---
 
@@ -259,7 +278,11 @@ The same image deploys to Nebius Serverless Endpoints.
 Honest about what this is after a short build:
 
 - **Single user, no auth.** Mnemo is designed to run on hardware you control. Put
-  it behind a reverse proxy before exposing it.
+  it behind a reverse proxy before exposing it. Demo mode separates visitors from
+  each other, which is not the same as authentication: a cookie identifies a
+  browser, not a person, so it is right for a public demo and wrong for real data.
+- **Demo turn counts are in memory.** A restart resets them. Acceptable for a
+  demo; a real deployment would move them to the database.
 - **Conversation history is client-side.** The memory store is durable; the chat
   transcript is not kept server-side and resets on reload. Durable facts survive
   precisely because the agent wrote them to memory.

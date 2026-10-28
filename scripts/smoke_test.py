@@ -54,6 +54,25 @@ with tempfile.TemporaryDirectory() as tmp:
         bad = True
     check("empty memory text is rejected", bad)
 
+print("\nowner isolation (public demo mode)")
+with tempfile.TemporaryDirectory() as tmp:
+    store = MemoryStore(Path(tmp) / "o.sqlite3")
+    a = store.add("Judge A private note.", owner="demo:aaa")
+    b = store.add("Judge B private note.", owner="demo:bbb")
+    check("each owner sees only their own",
+          [m["text"] for m in store.recent(owner="demo:aaa")] == ["Judge A private note."])
+    check("ids are not readable across owners", store.get(b["id"], owner="demo:aaa") is None)
+    check("deletes do not cross owners", store.delete(b["id"], owner="demo:aaa") is False)
+    check("updates do not cross owners", store.update(b["id"], owner="demo:aaa", text="hacked") is None)
+    check("B's memory survived", store.get(b["id"], owner="demo:bbb")["text"] == "Judge B private note.")
+    check("search is scoped", store.search("private", owner="demo:bbb") != []
+          and all(m["id"] == b["id"] for m in store.search("private", owner="demo:bbb")))
+    store.wipe(owner="demo:aaa")
+    check("wipe is scoped to one owner",
+          store.recent(owner="demo:aaa") == [] and len(store.recent(owner="demo:bbb")) == 1)
+    check("dedupe does not merge across owners",
+          store.add("Judge B private note.", owner="demo:ccc")["id"] != b["id"])
+
 print("\ndeduplication")
 with tempfile.TemporaryDirectory() as tmp:
     store = MemoryStore(Path(tmp) / "d.sqlite3")

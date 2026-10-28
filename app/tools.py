@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from .memory import KINDS, MemoryStore
+from .memory import DEFAULT_OWNER, KINDS, MemoryStore
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
@@ -165,8 +165,8 @@ def format_recall(memories: list[dict[str, Any]]) -> str:
     return "\n".join(f"[#{m['id']} {m['kind']}] {m['text']}" for m in memories)
 
 
-def summarize_store(store: MemoryStore) -> dict[str, Any]:
-    rows = store.recent(limit=1000)
+def summarize_store(store: MemoryStore, owner: str = DEFAULT_OWNER) -> dict[str, Any]:
+    rows = store.recent(limit=1000, owner=owner)
     by_kind: dict[str, int] = {}
     for row in rows:
         by_kind[row["kind"]] = by_kind.get(row["kind"], 0) + 1

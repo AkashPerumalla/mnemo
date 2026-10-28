@@ -13,7 +13,7 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from .config import Settings
-from .memory import MemoryStore
+from .memory import DEFAULT_OWNER, MemoryStore
 from .skills import Skill, load_skills
 from .tools import format_recall, tavily_search, tool_schemas
 
@@ -115,7 +115,11 @@ class Agent:
         return (resp.choices[0].message.content or "").strip()
 
     async def _run_tool(
-        self, name: str, args: dict[str, Any], skills: dict[str, Skill]
+        self,
+        name: str,
+        args: dict[str, Any],
+        skills: dict[str, Skill],
+        owner: str,
     ) -> tuple[str, dict[str, Any]]:
         """Returns (content for the model, event for the UI trace)."""
         if name == "remember":
@@ -124,6 +128,7 @@ class Agent:
                 kind=args.get("kind", "note"),
                 tags=args.get("tags") or [],
                 source="agent",
+                owner=owner,
             )
             deduped = bool(mem.get("deduped"))
             verb = "Updated existing" if deduped else "Saved as"
@@ -139,7 +144,9 @@ class Agent:
 
         if name == "recall":
             hits = self.store.search(
-                args.get("query", ""), limit=int(args.get("limit") or 8)
+                args.get("query", ""),
+                limit=int(args.get("limit") or 8),
+                owner=owner,
             )
             return (
                 format_recall(hits),
@@ -214,7 +221,10 @@ class Agent:
         return f"Unknown tool {name!r}.", {"tool": name, "detail": "unknown tool"}
 
     async def run_turn(
-        self, user_message: str, history: list[dict[str, str]] | None = None
+        self,
+        user_message: str,
+        history: list[dict[str, str]] | None = None,
+        owner: str = DEFAULT_OWNER,
     ) -> TurnResult:
         if not self.settings.nebius_ready:
             raise RuntimeError(
@@ -227,7 +237,7 @@ class Agent:
             "\n".join(s.summary() for s in skills.values()) or "(no skills installed)"
         )
         system = SYSTEM_PROMPT.format(
-            memory_context=self.store.context_block(user_message),
+            memory_context=self.store.context_block(user_message, owner=owner),
             skill_list=skill_list,
         )
 
@@ -276,7 +286,9 @@ class Agent:
                     args = json.loads(call.function.arguments or "{}")
                 except json.JSONDecodeError:
                     args = {}
-                content, event = await self._run_tool(call.function.name, args, skills)
+                content, event = await self._run_tool(
+                    call.function.name, args, skills, owner
+                )
                 result.events.append(event)
                 if event.get("model"):
                     result.models_used.append(event["model"])

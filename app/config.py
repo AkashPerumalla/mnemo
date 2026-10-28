@@ -30,6 +30,8 @@ class Settings:
     tavily_api_key: str
     data_dir: Path
     skills_dir: Path
+    demo_mode: bool
+    demo_turn_limit: int
 
     @property
     def db_path(self) -> Path:
@@ -53,6 +55,9 @@ def load_settings() -> Settings:
         tavily_api_key=os.getenv("TAVILY_API_KEY", "").strip(),
         data_dir=_path("MNEMO_DATA_DIR", "./data"),
         skills_dir=_path("MNEMO_SKILLS_DIR", "./skills"),
+        demo_mode=(os.getenv("MNEMO_DEMO_MODE", "") or "").strip().lower()
+        in ("1", "true", "yes"),
+        demo_turn_limit=int(os.getenv("MNEMO_DEMO_TURN_LIMIT") or 25),
     )
     s.data_dir.mkdir(parents=True, exist_ok=True)
     return s

@@ -258,6 +258,17 @@ commented disk block for paid instances.
 Free services also spin down after about 15 minutes idle and cold-start in
 roughly 50 seconds.
 
+### Verify a deployment
+
+```bash
+./scripts/verify_deployment.sh https://your-instance.example.com
+```
+
+Checks the health surface, that both API keys reached the host, that the page
+and assets serve, that per-visitor isolation actually holds against two separate
+cookie jars, and that a real agent turn reaches Token Factory and writes a
+memory. Pass `--no-chat` to skip the turn that spends tokens.
+
 ### Public demo mode
 
 A personal memory app has an obvious problem when you host it publicly: one

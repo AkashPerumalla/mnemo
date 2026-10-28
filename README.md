@@ -222,9 +222,23 @@ docker run -p 8000:8000 --env-file .env -v mnemo-data:/data mnemo
 ```
 
 The same image deploys to Nebius Serverless Endpoints.
-[`deploy/render.yaml`](deploy/render.yaml) is a Render blueprint, and
-[`deploy/Dockerfile.space`](deploy/Dockerfile.space) plus
-[`deploy/README-space.md`](deploy/README-space.md) deploy it as a Hugging Face Space.
+
+**Hugging Face Spaces** — a Space needs `Dockerfile` and a front-matter
+`README.md` at its own root, so the layout is assembled rather than pushed
+directly:
+
+```bash
+HF_TOKEN=hf_xxx ./scripts/deploy_space.sh <your-hf-username>
+```
+
+Then set `NEBIUS_API_KEY` and `TAVILY_API_KEY` under Settings → Variables and
+secrets. `./scripts/deploy_space.sh --dry-run` prints the layout without pushing
+and checks that `app_port` matches the port the container listens on.
+
+**Render** — New → Blueprint, pick this repo, and set the two keys when prompted.
+[`render.yaml`](render.yaml) is at the repo root where Render looks for it. The
+free plan has an ephemeral filesystem and cannot mount a disk, which suits demo
+mode; the blueprint has a commented disk block for paid instances.
 
 ### Public demo mode
 

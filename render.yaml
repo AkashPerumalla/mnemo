@@ -1,0 +1,32 @@
+# Render blueprint. In the Render dashboard: New -> Blueprint, pick this repo,
+# then set NEBIUS_API_KEY and TAVILY_API_KEY when prompted (they are marked
+# sync: false so they are never stored in git).
+#
+# Note on storage: Render attaches persistent disks to PAID instances only, and
+# a free service has an ephemeral filesystem that resets on restart. That is
+# fine here, because demo mode keeps memory per-visitor and expendable by
+# design. For a durable single-user deployment, move to a paid plan and
+# uncomment the disk block below.
+services:
+  - type: web
+    name: mnemo
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: MNEMO_DEMO_MODE
+        value: "1"
+      - key: MNEMO_DEMO_TURN_LIMIT
+        value: "25"
+      - key: MNEMO_DATA_DIR
+        value: /tmp/mnemo
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+    # Requires a paid instance type; also set MNEMO_DATA_DIR to /data.
+    # disk:
+    #   name: mnemo-data
+    #   mountPath: /data
+    #   sizeGB: 1

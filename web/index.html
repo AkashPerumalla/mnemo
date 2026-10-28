@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mnemo</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <h1>Mnemo</h1>
+      <p class="tagline">A personal AI whose memory is a file you own.</p>
+    </div>
+  </div>
+  <div class="status" id="status" role="status">Checking configuration&hellip;</div>
+</header>
+
+<main class="layout">
+  <section class="pane chat-pane" aria-label="Conversation">
+    <div class="transcript" id="transcript">
+      <div class="empty" id="empty">
+        <h2>Ask it something about you.</h2>
+        <p>Every fact it decides to keep shows up in the Memory pane, where you can
+           edit it, pin it, or delete it. Nothing is stored that you cannot see.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="Message Mnemo&hellip;"
+                autocomplete="off" aria-label="Message"></textarea>
+      <button type="submit" id="send" aria-label="Send">Send</button>
+    </form>
+  </section>
+
+  <section class="pane side-pane" aria-label="Memory and skills">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="memory" role="tab" aria-selected="true">
+        Memory <span class="count" id="memCount">0</span>
+      </button>
+      <button class="tab" data-tab="skills" role="tab" aria-selected="false">Skills</button>
+      <button class="tab" data-tab="config" role="tab" aria-selected="false">Stack</button>
+    </div>
+
+    <div class="tab-panel active" id="panel-memory" role="tabpanel">
+      <div class="side-actions">
+        <input id="memSearch" type="search" placeholder="Filter memories&hellip;" aria-label="Filter memories">
+        <a class="btn ghost" href="/api/memories/export" download>Export</a>
+        <button class="btn danger ghost" id="wipeBtn">Wipe</button>
+      </div>
+      <form class="add-memory" id="addMemory">
+        <input id="newMemText" placeholder="Add a memory yourself&hellip;" aria-label="New memory">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <ul class="memories" id="memories"></ul>
+    </div>
+
+    <div class="tab-panel" id="panel-skills" role="tabpanel">
+      <p class="hint">Skills are Markdown files in <code>skills/</code>. Edit a file
+         and the change is live on the next message &mdash; no restart.</p>
+      <ul class="skills" id="skills"></ul>
+    </div>
+
+    <div class="tab-panel" id="panel-config" role="tabpanel">
+      <ul class="config" id="config"></ul>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

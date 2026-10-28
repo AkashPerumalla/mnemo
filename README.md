@@ -1,0 +1,217 @@
+# Mnemo
+
+**A personal AI whose memory is a file you own.**
+
+Submitted to the **Personal AI Track** of the Nebius x NVIDIA Global AI Hackathon.
+
+Most assistants remember you in a place you cannot see. Mnemo inverts that: every
+fact it keeps is a row in a SQLite file on your disk, shown in a pane next to the
+chat, where you can read it, edit it, pin it or delete it. Memory is a product
+surface, not an implementation detail.
+
+It runs on **NVIDIA Nemotron** models served by **Nebius Token Factory**.
+
+---
+
+## What it does
+
+- **Glass-box memory.** The agent decides what to remember; you keep the final say.
+  Each row carries its kind, tags and provenance (`agent` or `user`), and the
+  answer cites the memory ids it relied on, so you can audit any claim back to its
+  source. One-click JSON export, one-click wipe.
+- **Reusable skills.** A skill is a Markdown file in `skills/` that you write.
+  Only each skill's name and description sit in the base prompt; the body loads
+  only when the agent calls `load_skill`, so adding skills costs almost no context.
+  Edit a file and the next message picks it up — no restart.
+- **Tools you choose.** Live web access via Tavily, memory read/write, and skill
+  loading. Tools absent from your `.env` are absent from the model's tool list
+  rather than failing at call time.
+- **Two-tier model routing.** Every turn starts on a fast model. The fast model
+  decides for itself when a sub-problem deserves the 550B reasoning model and
+  escalates by calling `think_harder`. The UI shows each escalation, so the cost
+  is visible rather than hidden.
+
+---
+
+## How Nebius and NVIDIA are used
+
+### NVIDIA open source models
+
+| Role | Model ID | Why this one |
+|---|---|---|
+| Every turn, tool orchestration | `nvidia/Nemotron-3_5-Lightning` | 1M context and the cheapest tier — it holds the memory context plus tool results and still answers fast |
+| Escalated reasoning only | `nvidia/Nemotron-3-Ultra-550b-a55b` | 550B hybrid MoE for multi-step planning and conflict resolution, invoked by the `think_harder` tool |
+
+Both are NVIDIA open source models, and both are served through Token Factory.
+`.env.example` documents the swap to `nvidia/nemotron-3-super-120b-a12b` or
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` — one env var, no code change.
+
+### Where Token Factory accelerated the workflow
+
+Token Factory is **OpenAI-compatible**, so the entire inference layer is the
+official `openai` client with `base_url` repointed — see
+[`app/agent.py`](app/agent.py):
+
+```python
+self.client = AsyncOpenAI(
+    api_key=settings.nebius_api_key,
+    base_url="https://api.tokenfactory.nebius.com/v1/",
+)
+```
+
+Three things that cost real time on other stacks cost none here:
+
+1. **No serving work.** Nemotron Ultra is a 550B model. Standing it up on our own
+   GPUs would have consumed the whole build window; on Token Factory it is one
+   model string. Two-tier routing was a config decision, not an infrastructure
+   project.
+2. **Tool calling worked on the first try.** The OpenAI-compatible
+   `tools` / `tool_choice` contract meant no custom parser for Nemotron's output —
+   the agent loop in `app/agent.py` is ~90 lines with no provider-specific shims.
+3. **Switching tiers is one env var.** Comparing Lightning against Super against
+   Ultra needed no redeploy, so model choice was settled by measurement.
+
+Every runtime inference call in this project — fast turns and escalations alike —
+is a call to the Token Factory inference API.
+
+### Other services used
+
+- **Tavily Search API** — the `web_search` tool makes a functional runtime call to
+  `POST https://api.tavily.com/search` ([`app/tools.py`](app/tools.py)), used by the
+  `research-note` skill to ground answers in live sources with URLs.
+- **Nebius Serverless Endpoints** — [`deploy/Dockerfile`](deploy/Dockerfile) is the
+  deployment path, with memories on a mounted volume so they survive redeploys.
+
+---
+
+## Architecture
+
+```
+Browser (web/)  ──►  FastAPI (app/main.py)  ──►  Agent loop (app/agent.py)
+                                                   │
+                        ┌──────────────────────────┼───────────────────────────┐
+                        ▼                          ▼                           ▼
+            Nemotron 3.5 Lightning       Nemotron 3 Ultra            Tool dispatch
+            (every turn, tools)          (via think_harder)          (app/tools.py)
+                        └──────── Nebius Token Factory ──────┘           │
+                                                        ┌───────────────┼────────────┐
+                                                        ▼               ▼            ▼
+                                                 SQLite memory    Tavily API    skills/*.md
+                                                 (app/memory.py)
+```
+
+| File | Responsibility |
+|---|---|
+| [`app/agent.py`](app/agent.py) | Tool-calling loop, system prompt, model routing |
+| [`app/memory.py`](app/memory.py) | SQLite store, inspectable token-overlap search |
+| [`app/tools.py`](app/tools.py) | Tool schemas, dispatch, Tavily client |
+| [`app/skills.py`](app/skills.py) | Markdown skill loader with frontmatter |
+| [`app/main.py`](app/main.py) | HTTP API and static file serving |
+| [`web/`](web/) | Chat UI plus the memory/skills/stack inspector |
+
+Memory search is deliberately token-overlap scoring rather than embeddings: the
+score is the fraction of query terms present, so the UI can always explain why a
+row matched. For a personal corpus of a few thousand rows this is both fast enough
+and honest. Swapping in embeddings means replacing one method, `MemoryStore.search`.
+
+---
+
+## Run it locally
+
+Requires Python 3.11+.
+
+```bash
+git clone <your-fork-url> && cd mnemo
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Add your keys to `.env`:
+
+- `NEBIUS_API_KEY` — **required.** Create one at
+  [tokenfactory.nebius.com](https://tokenfactory.nebius.com).
+- `TAVILY_API_KEY` — optional. Without it the `web_search` tool is simply not
+  offered to the model; everything else works.
+
+Then start it:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Open <http://localhost:8000>.
+
+> If your account is pinned to a region, set `NEBIUS_BASE_URL` to the
+> region-suffixed host your dashboard shows (for example
+> `https://api.tokenfactory.us-central1.nebius.com/v1/`). Note that Lightning and
+> Nano are served from `eu-north1` while Super and Ultra are served from
+> `us-central1`.
+
+### Verify without burning credits
+
+```bash
+python scripts/smoke_test.py
+```
+
+Exercises the memory store, skill loading and tool-schema gating offline — no API
+key and no network.
+
+### Deploy
+
+```bash
+docker build -f deploy/Dockerfile -t mnemo .
+docker run -p 8000:8000 --env-file .env -v mnemo-data:/data mnemo
+```
+
+The same image deploys to Nebius Serverless Endpoints.
+
+---
+
+## Try these
+
+1. *"I'm building a robotics side project in Rust and I keep hitting lifetime
+   errors. Remember that."* — watch a row appear in the Memory pane.
+2. *"What do you know about me so far?"* — the trace shows `recall` running before
+   the answer, and the answer cites memory ids.
+3. *"Research what changed in open-weight reasoning models this month, then file the
+   conclusion."* — loads the `research-note` skill, searches via Tavily, escalates
+   to Ultra if sources conflict, then writes exactly one memory.
+4. Delete the memory from step 1, then ask step 2 again. It is genuinely gone.
+
+---
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/chat` | Run one agent turn; returns reply, tool trace, models used |
+| `GET` | `/api/memories` | List memories with a per-kind summary |
+| `POST` | `/api/memories` | Add a memory by hand |
+| `PATCH` | `/api/memories/{id}` | Edit text, kind, tags or pin |
+| `DELETE` | `/api/memories/{id}` | Delete one memory |
+| `GET` | `/api/memories/export` | Download every memory as JSON |
+| `POST` | `/api/memories/wipe` | Delete everything |
+| `GET` | `/api/skills` | List loaded skills with bodies |
+| `GET` | `/api/health` | Config, models, memory and skill counts |
+
+---
+
+## Limitations
+
+Honest about what this is after a short build:
+
+- **Single user, no auth.** Mnemo is designed to run on hardware you control. Put
+  it behind a reverse proxy before exposing it.
+- **Conversation history is client-side.** The memory store is durable; the chat
+  transcript is not kept server-side and resets on reload. Durable facts survive
+  precisely because the agent wrote them to memory.
+- **Search is lexical.** A query phrased with entirely different words than the
+  stored memory can miss. See the note on `MemoryStore.search` above.
+- **No scheduler yet.** "Always-on" today means persistent state across sessions,
+  not background execution. Nebius Serverless Jobs is the intended path for
+  recurring skills such as `daily-brief`.
+
+## License
+
+[MIT](LICENSE)

@@ -200,6 +200,9 @@ async function loadMemories(flashIds = []) {
   const data = await resp.json();
   allMemories = data.memories || [];
   renderMemories(flashIds);
+  // The Stack tab reports counts from /api/health, so refresh it alongside the
+  // memories or it keeps showing whatever was true when the page loaded.
+  loadHealth();
 }
 
 async function loadSkills() {

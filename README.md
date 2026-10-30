@@ -1,5 +1,7 @@
 # Mnemo
 
+![Mnemo](assets/thumbnail.png)
+
 **A personal AI whose memory is a file you own.**
 
 Submitted to the **Personal AI Track** of the Nebius x NVIDIA Global AI Hackathon.
